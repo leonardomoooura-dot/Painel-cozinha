@@ -1,0 +1,1345 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Painel da Cozinha — Casa do Crepe</title>
+
+<style>
+:root{
+  --red:#b51f18;
+  --dark:#74140f;
+  --yellow:#f5c928;
+  --cream:#fff7e8;
+  --paper:#fffdf8;
+  --text:#3b2922;
+  --muted:#78675f;
+  --line:#ead9bf;
+  --green:#2f7d32;
+  --shadow:0 5px 18px rgba(90,50,20,.10)
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:var(--cream);
+  color:var(--text);
+  font-family:Arial,Helvetica,sans-serif
+}
+
+.top{
+  height:8px;
+  background:linear-gradient(
+    90deg,
+    var(--red) 0 72%,
+    var(--yellow) 72%
+  )
+}
+
+header{
+  background:var(--red);
+  color:white;
+  padding:18px 16px;
+  position:sticky;
+  top:0;
+  z-index:10;
+  box-shadow:0 3px 12px #0002
+}
+
+.head{
+  max-width:1100px;
+  margin:auto;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px
+}
+
+.title{
+  font-size:25px;
+  font-weight:900
+}
+
+.sub{
+  font-size:13px;
+  opacity:.9;
+  margin-top:3px
+}
+
+.live{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  font-weight:800;
+  font-size:13px;
+  background:#ffffff1c;
+  padding:8px 10px;
+  border-radius:999px
+}
+
+.dot{
+  width:9px;
+  height:9px;
+  border-radius:50%;
+  background:#8df08d;
+  box-shadow:0 0 8px #8df08d
+}
+
+main{
+  max-width:1100px;
+  margin:20px auto;
+  padding:0 14px 40px
+}
+
+.toolbar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom:16px
+}
+
+.count{
+  font-weight:900
+}
+
+.orders{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px
+}
+
+.empty{
+  grid-column:1/-1;
+  text-align:center;
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:35px;
+  color:var(--muted)
+}
+
+.card{
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:15px;
+  box-shadow:var(--shadow);
+  overflow:hidden
+}
+
+.card.new{
+  border:2px solid var(--yellow);
+  animation:pop .45s ease
+}
+
+@keyframes pop{
+  0%{transform:scale(.98)}
+  100%{transform:scale(1)}
+}
+
+.cardhead{
+  padding:14px 15px;
+  border-bottom:1px solid var(--line);
+  display:flex;
+  justify-content:space-between;
+  gap:10px
+}
+
+.orderid{
+  font-weight:900
+}
+
+.time{
+  font-size:12px;
+  color:var(--muted);
+  margin-top:4px
+}
+
+.body{
+  padding:14px 15px
+}
+
+.customer{
+  font-weight:900
+}
+
+.address{
+  font-size:13px;
+  color:var(--muted);
+  margin-top:4px;
+  line-height:1.35
+}
+
+.items{
+  margin:14px 0 0;
+  padding:0;
+  list-style:none
+}
+
+.item{
+  padding:10px 0;
+  border-bottom:1px solid #eee0ce
+}
+
+.item:last-child{
+  border-bottom:0
+}
+
+.qty{
+  font-weight:900
+}
+
+.cat{
+  font-size:11px;
+  text-transform:uppercase;
+  color:var(--muted);
+  font-weight:900;
+  margin-bottom:3px
+}
+
+.addons{
+  font-size:12px;
+  color:#765b4e;
+  margin-top:3px
+}
+
+.total{
+  display:flex;
+  justify-content:space-between;
+  border-top:1px solid var(--line);
+  padding-top:12px;
+  margin-top:5px;
+  font-size:18px;
+  font-weight:900
+}
+
+.actions{
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+  padding:12px 15px;
+  background:#fff9ef;
+  border-top:1px solid var(--line)
+}
+
+.actions button{
+  flex:1;
+  min-width:110px;
+  border:1px solid var(--line);
+  background:var(--paper);
+  padding:9px 12px;
+  border-radius:9px;
+  font-weight:800;
+  cursor:pointer;
+  color:var(--text)
+}
+
+.actions .primary{
+  background:var(--dark);
+  color:white;
+  border-color:var(--dark)
+}
+
+.actions .cancel{
+  color:#a21e1e
+}
+
+.toast{
+  position:fixed;
+  right:15px;
+  bottom:15px;
+  background:var(--dark);
+  color:white;
+  padding:13px 16px;
+  border-radius:10px;
+  box-shadow:0 5px 20px #0004;
+  display:none;
+  font-weight:800;
+  z-index:30;
+  max-width:calc(100vw - 30px)
+}
+
+.toast.show{
+  display:block
+}
+
+.login-screen{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  background:var(--cream)
+}
+
+.login-box{
+  width:min(420px,100%);
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:16px;
+  box-shadow:var(--shadow);
+  padding:24px
+}
+
+.login-box h1{
+  margin:0;
+  color:var(--dark);
+  font-size:25px
+}
+
+.login-box p{
+  color:var(--muted);
+  font-size:14px;
+  margin:7px 0 20px
+}
+
+.login-box label{
+  display:block;
+  font-weight:800;
+  font-size:13px;
+  margin:12px 0 6px
+}
+
+.login-box input{
+  width:100%;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  font-size:16px;
+  background:#fff
+}
+
+.login-box button{
+  width:100%;
+  margin-top:16px;
+  border:0;
+  border-radius:9px;
+  padding:12px;
+  background:var(--dark);
+  color:#fff;
+  font-weight:900;
+  font-size:15px;
+  cursor:pointer
+}
+
+.login-error{
+  color:#a21e1e;
+  font-size:13px;
+  font-weight:700;
+  margin-top:10px;
+  min-height:18px
+}
+
+.hidden{
+  display:none!important
+}
+
+.logout{
+  border:1px solid #ffffff55;
+  background:#ffffff18;
+  color:#fff;
+  border-radius:9px;
+  padding:8px 10px;
+  font-weight:800;
+  cursor:pointer
+}
+
+@media(max-width:720px){
+  .orders{
+    grid-template-columns:1fr
+  }
+
+  .head{
+    align-items:flex-start
+  }
+
+  .title{
+    font-size:21px
+  }
+
+  .live{
+    font-size:11px
+  }
+
+  .toolbar{
+    align-items:flex-start;
+    flex-direction:column
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div id="loginScreen" class="login-screen">
+  <form class="login-box" id="loginForm">
+
+    <h1>Casa do Crepe</h1>
+
+    <p>
+      Acesso restrito ao painel da cozinha.
+    </p>
+
+    <label for="email">E-mail</label>
+    <input
+      id="email"
+      type="email"
+      autocomplete="username"
+      required
+    >
+
+    <label for="password">Senha</label>
+    <input
+      id="password"
+      type="password"
+      autocomplete="current-password"
+      required
+    >
+
+    <button type="submit">
+      Entrar no painel
+    </button>
+
+    <div class="login-error" id="loginError"></div>
+
+  </form>
+</div>
+
+
+<div id="app" class="hidden">
+
+  <div class="top"></div>
+
+  <header>
+    <div class="head">
+
+      <div>
+        <div class="title">
+          Casa do Crepe
+        </div>
+
+        <div class="sub">
+          Painel da cozinha
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px">
+
+        <div class="live">
+          <span class="dot"></span>
+          Pedidos em tempo real
+        </div>
+
+        <button class="logout" id="logoutBtn">
+          Sair
+        </button>
+
+      </div>
+
+    </div>
+  </header>
+
+
+  <main>
+
+    <div class="toolbar">
+      <div class="count" id="count">
+        Carregando pedidos...
+      </div>
+    </div>
+
+    <section class="orders" id="orders">
+      <div class="empty">
+        Carregando...
+      </div>
+    </section>
+
+  </main>
+
+
+  <div class="toast" id="toast"></div>
+
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+
+const SUPABASE_URL =
+  'https://dmmmfumdlvhrlqxbhkcd.supabase.co';
+
+const SUPABASE_PUBLISHABLE_KEY =
+  'sb_publishable_AsI3TBXPc5D1KzEIinR4mA_yBw87nnb';
+
+const db =
+  window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
+  );
+
+
+let orders = [];
+let channel = null;
+
+
+const money = value => {
+  return Number(value || 0).toLocaleString(
+    'pt-BR',
+    {
+      style:'currency',
+      currency:'BRL'
+    }
+  );
+};
+
+
+const esc = value => {
+  return String(value ?? '').replace(
+    /[&<>"']/g,
+    char => ({
+      '&':'&amp;',
+      '<':'&lt;',
+      '>':'&gt;',
+      '"':'&quot;',
+      "'":'&#039;'
+    }[char])
+  );
+};
+
+
+function formatTime(value){
+  return new Date(value).toLocaleString(
+    'pt-BR',
+    {
+      dateStyle:'short',
+      timeStyle:'short'
+    }
+  );
+}
+
+
+function toast(message){
+
+  const element =
+    document.getElementById('toast');
+
+  element.textContent = message;
+
+  element.classList.add('show');
+
+  setTimeout(
+    () => element.classList.remove('show'),
+    4000
+  );
+}
+
+
+/* =========================
+   RENDER DOS PEDIDOS
+========================= */
+
+function render(){
+
+  document.getElementById('count').textContent =
+    `${orders.length} pedido${orders.length === 1 ? '' : 's'} exibido${orders.length === 1 ? '' : 's'}`;
+
+  const root =
+    document.getElementById('orders');
+
+  if(!orders.length){
+
+    root.innerHTML =
+      '<div class="empty">Nenhum pedido recebido.</div>';
+
+    return;
+  }
+
+  root.innerHTML =
+    orders.map(order => card(order)).join('');
+}
+
+
+/* =========================
+   CARD DO PEDIDO
+========================= */
+
+function card(o){
+
+  const items =
+    o.order_items || [];
+
+  const shortId =
+    o.id.slice(0,6).toUpperCase();
+
+  return `
+    <article class="card ${o.status === 'novo' ? 'new' : ''}">
+
+      <div class="cardhead">
+
+        <div>
+
+          <div class="orderid">
+            Pedido #${esc(shortId)}
+          </div>
+
+          <div class="time">
+            ${formatTime(o.created_at)}
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="body">
+
+        <div class="customer">
+          ${esc(o.customer_name)}
+        </div>
+
+        <div class="address">
+          ${esc(o.address)}
+        </div>
+
+
+        <ul class="items">
+
+          ${items.map(i => `
+
+            <li class="item">
+
+              <div class="cat">
+                ${esc(i.category)}
+              </div>
+
+              <div>
+                <span class="qty">
+                  ${i.quantity}×
+                </span>
+
+                ${esc(i.item_name)}
+              </div>
+
+
+              ${
+                Array.isArray(i.addons) &&
+                i.addons.length
+                ?
+                `
+                  <div class="addons">
+                    Adicionais:
+                    ${i.addons.map(
+                      a => esc(
+                        typeof a === 'string'
+                          ? a
+                          : (a.name || '')
+                      )
+                    ).join(', ')}
+                  </div>
+                `
+                :
+                ''
+              }
+
+            </li>
+
+          `).join('')}
+
+        </ul>
+
+
+        <div class="total">
+
+          <span>
+            Total
+          </span>
+
+          <span>
+            ${money(o.total)}
+          </span>
+
+        </div>
+
+      </div>
+
+
+      <div class="actions">
+
+        <button
+          class="primary"
+          onclick="printOrder('${o.id}')"
+        >
+          🖨️ Imprimir pedido #${esc(shortId)}
+        </button>
+
+
+        <button
+          class="cancel"
+          onclick="cancelOrder('${o.id}')"
+        >
+          ❌ Cancelar
+        </button>
+
+      </div>
+
+    </article>
+  `;
+}
+
+
+/* =========================
+   IMPRESSÃO CLEANter
+========================= */
+
+async function printOrder(id){
+
+  const order =
+    orders.find(x => x.id === id);
+
+  if(!order){
+    toast('Pedido não encontrado.');
+    return;
+  }
+
+
+  const shortId =
+    id.slice(0,6).toUpperCase();
+
+
+  /*
+    Cleanter trabalha com blocos ESC/POS.
+    Para papel 58 mm usamos:
+    - text
+    - row
+    - divider
+    - feed
+
+    Evitamos emojis e caracteres especiais
+    porque impressoras térmicas ESC/POS
+    podem não suportá-los.
+  */
+
+  const content = [];
+
+
+  /* CABEÇALHO */
+
+  content.push({
+    type:'text',
+    text:'CASA DO CREPE',
+    align:'center',
+    bold:true,
+    size:'large'
+  });
+
+
+  content.push({
+    type:'text',
+    text:'PEDIDO #'+shortId,
+    align:'center',
+    bold:true
+  });
+
+
+  content.push({
+    type:'divider'
+  });
+
+
+  /* CLIENTE */
+
+  content.push({
+    type:'text',
+    text:'Cliente: '+(
+      order.customer_name || ''
+    ),
+    bold:true
+  });
+
+
+  content.push({
+    type:'text',
+    text:'Endereco: '+(
+      order.address || ''
+    )
+  });
+
+
+  content.push({
+    type:'divider'
+  });
+
+
+  /* PRODUTOS */
+
+  (order.order_items || []).forEach(item => {
+
+    const quantity =
+      Number(item.quantity || 0);
+
+    const name =
+      String(item.item_name || '');
+
+    const category =
+      String(item.category || '');
+
+
+    content.push({
+      type:'row',
+      left:`${quantity}x ${name}`,
+      right:money(
+        item.subtotal ??
+        (
+          Number(item.unit_price || 0) *
+          quantity
+        )
+      ).replace('R$','').trim()
+    });
+
+
+    if(category){
+
+      content.push({
+        type:'text',
+        text:category,
+        size:'small'
+      });
+
+    }
+
+
+    if(
+      Array.isArray(item.addons) &&
+      item.addons.length
+    ){
+
+      const addons =
+        item.addons
+          .map(a =>
+            typeof a === 'string'
+              ? a
+              : (a.name || '')
+          )
+          .filter(Boolean)
+          .join(', ');
+
+
+      if(addons){
+
+        content.push({
+          type:'text',
+          text:'Adicionais: '+addons,
+          size:'small'
+        });
+
+      }
+
+    }
+
+  });
+
+
+  content.push({
+    type:'divider'
+  });
+
+
+  /* TOTAL */
+
+  content.push({
+    type:'row',
+    left:'TOTAL',
+    right:money(order.total)
+      .replace('R$','')
+      .trim(),
+    bold:true
+  });
+
+
+  content.push({
+    type:'feed',
+    lines:3
+  });
+
+
+  const payload = {
+
+    /*
+      58 mm = aproximadamente
+      32 caracteres por linha.
+    */
+
+    paperWidth:58,
+
+    cut:true,
+
+    content:content
+
+  };
+
+
+  try{
+
+    /*
+      IMPORTANTE:
+      essa chamada só acontece quando
+      o usuário toca no botão Imprimir.
+      Isso é necessário para o Chrome
+      liberar o acesso à rede local.
+    */
+
+    const response =
+      await fetch(
+        'http://localhost:9100/print',
+        {
+          method:'POST',
+
+          headers:{
+            'Content-Type':
+              'application/json'
+          },
+
+          body:
+            JSON.stringify(payload)
+        }
+      );
+
+
+    let result = null;
+
+    try{
+      result =
+        await response.json();
+    }catch(_){
+      result = null;
+    }
+
+
+    if(!response.ok){
+
+      const errorMessage =
+        result?.error ||
+        result?.message ||
+        `HTTP ${response.status}`;
+
+      throw new Error(errorMessage);
+    }
+
+
+    toast(
+      'Pedido #'+shortId+
+      ' enviado para a impressora ✓'
+    );
+
+
+  }catch(error){
+
+    console.error(
+      'Erro ao imprimir:',
+      error
+    );
+
+
+    const message =
+      String(error?.message || '');
+
+
+    if(
+      message.includes('printer_not_connected') ||
+      message.includes('printer_unreachable') ||
+      message.includes('503')
+    ){
+
+      toast(
+        'A impressora está desconectada. Verifique o Cleanter.'
+      );
+
+      return;
+    }
+
+
+    if(
+      message.includes('Failed to fetch') ||
+      message.includes('NetworkError') ||
+      message.includes('Load failed')
+    ){
+
+      toast(
+        'O Chrome bloqueou o acesso ao Cleanter. Verifique "Apps no dispositivo" nas permissões deste site.'
+      );
+
+      return;
+    }
+
+
+    toast(
+      'Não foi possível imprimir: '+
+      message
+    );
+
+  }
+
+}
+
+
+/* =========================
+   CANCELAR PEDIDO
+========================= */
+
+async function cancelOrder(id){
+
+  if(
+    !confirm(
+      'Cancelar este pedido?'
+    )
+  ){
+    return;
+  }
+
+
+  const {error} =
+    await db
+      .from('orders')
+      .update({
+        status:'cancelado'
+      })
+      .eq('id',id);
+
+
+  if(error){
+
+    toast(
+      'Não foi possível cancelar o pedido.'
+    );
+
+    console.error(error);
+
+    return;
+  }
+
+
+  const order =
+    orders.find(x => x.id === id);
+
+
+  if(order){
+    order.status =
+      'cancelado';
+  }
+
+
+  render();
+
+
+  toast(
+    'Pedido cancelado'
+  );
+
+}
+
+
+/* =========================
+   CARREGAR PEDIDOS
+========================= */
+
+async function load(){
+
+  const {data,error} =
+    await db
+      .from('orders')
+      .select(
+        'id,customer_name,address,total,status,created_at,order_items(id,category,item_name,quantity,unit_price,subtotal,addons)'
+      )
+      .order(
+        'created_at',
+        {
+          ascending:false
+        }
+      );
+
+
+  if(error){
+
+    document.getElementById(
+      'orders'
+    ).innerHTML =
+      `
+        <div class="empty">
+          Não foi possível carregar os pedidos.
+          Verifique sua sessão e a conexão.
+        </div>
+      `;
+
+    console.error(error);
+
+    return;
+  }
+
+
+  orders =
+    data || [];
+
+
+  render();
+
+}
+
+
+/* =========================
+   INICIAR PAINEL
+========================= */
+
+async function startPanel(){
+
+  document
+    .getElementById('loginScreen')
+    .classList
+    .add('hidden');
+
+
+  document
+    .getElementById('app')
+    .classList
+    .remove('hidden');
+
+
+  await load();
+
+
+  if(channel){
+
+    await db.removeChannel(
+      channel
+    );
+
+  }
+
+
+  channel =
+    db
+      .channel('cozinha-pedidos')
+
+      .on(
+        'postgres_changes',
+        {
+          event:'INSERT',
+          schema:'public',
+          table:'orders'
+        },
+        async () => {
+
+          await load();
+
+          toast(
+            'Novo pedido recebido!'
+          );
+
+        }
+      )
+
+      .on(
+        'postgres_changes',
+        {
+          event:'UPDATE',
+          schema:'public',
+          table:'orders'
+        },
+        async () => {
+
+          await load();
+
+        }
+      )
+
+      .subscribe(
+        status => {
+
+          if(
+            status === 'SUBSCRIBED'
+          ){
+
+            toast(
+              'Conectado ao tempo real'
+            );
+
+          }
+
+        }
+      );
+
+}
+
+
+/* =========================
+   LOGIN
+========================= */
+
+function showLogin(
+  message=''
+){
+
+  document
+    .getElementById('app')
+    .classList
+    .add('hidden');
+
+
+  document
+    .getElementById('loginScreen')
+    .classList
+    .remove('hidden');
+
+
+  document
+    .getElementById('loginError')
+    .textContent =
+      message;
+
+
+  document
+    .getElementById('password')
+    .value='';
+
+
+  if(channel){
+
+    db.removeChannel(
+      channel
+    );
+
+    channel=null;
+
+  }
+
+}
+
+
+/* =========================
+   FORMULÁRIO DE LOGIN
+========================= */
+
+document
+  .getElementById('loginForm')
+  .addEventListener(
+    'submit',
+    async event => {
+
+      event.preventDefault();
+
+
+      const email =
+        document
+          .getElementById('email')
+          .value
+          .trim();
+
+
+      const password =
+        document
+          .getElementById('password')
+          .value;
+
+
+      const error =
+        document
+          .getElementById('loginError');
+
+
+      error.textContent =
+        'Entrando...';
+
+
+      const {error:authError} =
+        await db.auth
+          .signInWithPassword({
+            email,
+            password
+          });
+
+
+      if(authError){
+
+        error.textContent =
+          'E-mail ou senha incorretos.';
+
+        console.error(
+          authError
+        );
+
+        return;
+      }
+
+
+      error.textContent='';
+
+    }
+  );
+
+
+/* =========================
+   LOGOUT
+========================= */
+
+document
+  .getElementById('logoutBtn')
+  .addEventListener(
+    'click',
+    async () => {
+
+      await db.auth.signOut();
+
+      showLogin('');
+
+    }
+  );
+
+
+/* =========================
+   AUTH SUPABASE
+========================= */
+
+db.auth.onAuthStateChange(
+  (event,session) => {
+
+    if(session){
+
+      startPanel();
+
+    }else{
+
+      showLogin('');
+
+    }
+
+  }
+);
+
+
+/* =========================
+   INICIALIZAÇÃO
+========================= */
+
+(async()=>{
+
+  const {data} =
+    await db.auth.getSession();
+
+
+  if(data.session){
+
+    startPanel();
+
+  }else{
+
+    showLogin('');
+
+  }
+
+})();
+
+</script>
+
+</body>
+</html>
