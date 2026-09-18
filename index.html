@@ -17,68 +17,18 @@ main{max-width:1100px;margin:20px auto;padding:0 14px 40px}.toolbar{display:flex
 </style>
 </head>
 <body>
+<div id="loginScreen" class="login-screen"><form class="login-box" id="loginForm"><h1>Casa do Crepe</h1><p>Acesso restrito ao painel da cozinha.</p><label for="email">E-mail</label><input id="email" type="email" autocomplete="username" required><label for="password">Senha</label><input id="password" type="password" autocomplete="current-password" required><button type="submit">Entrar no painel</button><div class="login-error" id="loginError"></div></form></div>
 
-<div id="loginScreen" class="login-screen">
-  <form class="login-box" id="loginForm">
-    <h1>Casa do Crepe</h1>
-    <p>Acesso restrito ao painel da cozinha.</p>
+<div id="app" class="hidden"><div class="top"></div>
+<header><div class="head"><div><div class="title">Casa do Crepe</div><div class="sub">Painel da cozinha</div></div><div style="display:flex;align-items:center;gap:8px"><div class="live"><span class="dot"></span> Pedidos em tempo real</div><button class="logout" id="logoutBtn">Sair</button></div></div></header>
 
-    <label for="email">E-mail</label>
-    <input id="email" type="email" autocomplete="username" required>
-
-    <label for="password">Senha</label>
-    <input id="password" type="password" autocomplete="current-password" required>
-
-    <button type="submit">Entrar no painel</button>
-    <div class="login-error" id="loginError"></div>
-  </form>
-</div>
-
-<div id="app" class="hidden">
-  <div class="top"></div>
-
-  <header>
-    <div class="head">
-      <div>
-        <div class="title">Casa do Crepe</div>
-        <div class="sub">Painel da cozinha</div>
-      </div>
-
-      <div style="display:flex;align-items:center;gap:8px">
-        <div class="live">
-          <span class="dot"></span>
-          Pedidos em tempo real
-        </div>
-
-        <button class="logout" id="logoutBtn">Sair</button>
-      </div>
-    </div>
-  </header>
-
-  <main>
-    <div class="toolbar">
-      <div class="count" id="count">Carregando pedidos...</div>
-    </div>
-
-    <section class="orders" id="orders">
-      <div class="empty">Carregando...</div>
-    </section>
-  </main>
-
-  <div class="toast" id="toast"></div>
-</div>
+<main><div class="toolbar"><div class="count" id="count">Carregando pedidos...</div></div><section class="orders" id="orders"><div class="empty">Carregando...</div></section></main><div class="toast" id="toast"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <script>
 const SUPABASE_URL='https://dmmmfumdlvhrlqxbhkcd.supabase.co';
-
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_AsI3TBXPc5D1KzEIinR4mA_yBw87nnb';
-
-const db=window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_PUBLISHABLE_KEY
-);
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 
 let orders=[];
 let channel=null;
@@ -119,11 +69,7 @@ function toast(t){
   const e=document.getElementById('toast');
   e.textContent=t;
   e.classList.add('show');
-
-  setTimeout(
-    ()=>e.classList.remove('show'),
-    3500
-  );
+  setTimeout(()=>e.classList.remove('show'),3500);
 }
 
 function render(){
@@ -144,6 +90,27 @@ function cleanItemName(value){
   return String(value??'')
     .replace(/\s*\+\s*$/,'')
     .trim();
+}
+
+function printerText(value){
+  return String(value??'')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .replace(/[ÍÌÎÏ]/g,'I')
+    .replace(/[íìîï]/g,'i');
+}
+
+function cleanPrintedItemName(name,category){
+  let text=cleanItemName(name);
+  const cat=String(category??'');
+
+  if(/\b(?:250|269|310|330|350|500|600|1000)\s*ml\b/i.test(cat)){
+    text=text
+      .replace(/\s+\d+(?:[.,]\d+)?\s*ml\s*$/i,'')
+      .trim();
+  }
+
+  return text;
 }
 
 function card(o){
@@ -249,7 +216,6 @@ async function printOrder(id){
   if(!o)return;
 
   const shortId=id.slice(0,6).toUpperCase();
-
   const content=[];
 
   content.push({
@@ -273,12 +239,12 @@ async function printOrder(id){
 
   content.push({
     type:'text',
-    text:'Cliente: '+(o.customer_name||'')
+    text:'Cliente: '+printerText(o.customer_name||'')
   });
 
   content.push({
     type:'text',
-    text:'Endereço: '+(o.address||'')
+    text:'Endereco: '+printerText(o.address||'')
   });
 
   content.push({
@@ -306,7 +272,10 @@ async function printOrder(id){
       groups.push(group);
     }
 
-    let name=cleanItemName(i.item_name);
+    let name=cleanPrintedItemName(
+      i.item_name,
+      i.category
+    );
 
     let addons=Array.isArray(i.addons)
       ?
@@ -320,10 +289,8 @@ async function printOrder(id){
       :
       [];
 
-    /*
-      Compatibilidade com pedidos antigos
-      que gravaram os adicionais no nome usando "+".
-    */
+    // Compatibilidade com pedidos antigos
+    // que gravaram os adicionais no nome usando "+".
 
     if(!addons.length && name.includes(' + ')){
 
@@ -366,7 +333,7 @@ async function printOrder(id){
 
     content.push({
       type:'text',
-      text:group.category.toUpperCase(),
+      text:printerText(group.category).toUpperCase(),
       bold:true
     });
 
@@ -376,7 +343,7 @@ async function printOrder(id){
         type:'row',
 
         left:
-          `${item.quantity}x ${item.name}`,
+          `${item.quantity}x ${printerText(item.name)}`,
 
         right:
           money(item.subtotal),
@@ -391,7 +358,7 @@ async function printOrder(id){
 
           text:
             'Adicionais: '+
-            item.addons.join(', ')
+            item.addons.map(printerText).join(', ')
         });
 
       }
@@ -490,11 +457,7 @@ async function cancelOrder(id){
     return;
   }
 
-  /*
-    Remove imediatamente da lista local.
-    Assim o pedido desaparece do painel
-    sem precisar esperar uma nova consulta.
-  */
+  // Remove imediatamente da lista local.
 
   orders=orders.filter(
     x=>x.id!==id
