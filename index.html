@@ -1,13 +1,39 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Painel da Cozinha — Casa do Crepe</title>
+
 <style>
-:root{--red:#b51f18;--dark:#74140f;--yellow:#f5c928;--cream:#fff7e8;--paper:#fffdf8;--text:#3b2922;--muted:#78675f;--line:#ead9bf;--green:#2f7d32;--orange:#d97817;--blue:#2867a8;--shadow:0 5px 18px rgba(90,50,20,.10)}
+:root{
+  --red:#b51f18;
+  --dark:#74140f;
+  --yellow:#f5c928;
+  --cream:#fff7e8;
+  --paper:#fffdf8;
+  --text:#3b2922;
+  --muted:#78675f;
+  --line:#ead9bf;
+  --green:#2f7d32;
+  --orange:#d97817;
+  --blue:#2867a8;
+  --shadow:0 5px 18px rgba(90,50,20,.10)
+}
+
 *{box-sizing:border-box}
-body{margin:0;background:var(--cream);color:var(--text);font-family:Arial,Helvetica,sans-serif}
-.top{height:8px;background:linear-gradient(90deg,var(--red) 0 72%,var(--yellow) 72%)}
+
+body{
+  margin:0;
+  background:var(--cream);
+  color:var(--text);
+  font-family:Arial,Helvetica,sans-serif
+}
+
+.top{
+  height:8px;
+  background:linear-gradient(90deg,var(--red) 0 72%,var(--yellow) 72%)
+}
 
 header{
   background:var(--red);
@@ -28,8 +54,16 @@ header{
   gap:12px
 }
 
-.title{font-size:25px;font-weight:900}
-.sub{font-size:13px;opacity:.9;margin-top:3px}
+.title{
+  font-size:25px;
+  font-weight:900
+}
+
+.sub{
+  font-size:13px;
+  opacity:.9;
+  margin-top:3px
+}
 
 .live{
   display:flex;
@@ -64,7 +98,9 @@ main{
   margin-bottom:16px
 }
 
-.count{font-weight:900}
+.count{
+  font-weight:900
+}
 
 .filters{
   display:flex;
@@ -72,7 +108,8 @@ main{
   flex-wrap:wrap
 }
 
-.filters button,.actions button{
+.filters button,
+.actions button{
   border:1px solid var(--line);
   background:var(--paper);
   padding:9px 12px;
@@ -144,7 +181,9 @@ main{
   gap:10px
 }
 
-.orderid{font-weight:900}
+.orderid{
+  font-weight:900
+}
 
 .time{
   font-size:12px;
@@ -167,9 +206,13 @@ main{
 .entregue{background:#e5e5e5;color:#555}
 .cancelado{background:#ffdede;color:#9a2222}
 
-.body{padding:14px 15px}
+.body{
+  padding:14px 15px
+}
 
-.customer{font-weight:900}
+.customer{
+  font-weight:900
+}
 
 .address{
   font-size:13px;
@@ -189,9 +232,13 @@ main{
   border-bottom:1px solid #eee0ce
 }
 
-.item:last-child{border-bottom:0}
+.item:last-child{
+  border-bottom:0
+}
 
-.qty{font-weight:900}
+.qty{
+  font-weight:900
+}
 
 .cat{
   font-size:11px;
@@ -243,7 +290,9 @@ main{
   border-color:var(--green)
 }
 
-.actions .cancel{color:#a21e1e}
+.actions .cancel{
+  color:#a21e1e
+}
 
 .toast{
   position:fixed;
@@ -259,19 +308,39 @@ main{
   z-index:30
 }
 
-.toast.show{display:block}
+.toast.show{
+  display:block
+}
 
 @media(max-width:720px){
-  .orders{grid-template-columns:1fr}
-  .head{align-items:flex-start}
-  .title{font-size:21px}
-  .live{font-size:11px}
+  .orders{
+    grid-template-columns:1fr
+  }
+
+  .head{
+    align-items:flex-start
+  }
+
+  .title{
+    font-size:21px
+  }
+
+  .live{
+    font-size:11px
+  }
+
   .toolbar{
     align-items:flex-start;
     flex-direction:column
   }
-  .filters{width:100%}
-  .filters button{flex:1}
+
+  .filters{
+    width:100%
+  }
+
+  .filters button{
+    flex:1
+  }
 }
 
 .login-screen{
@@ -341,7 +410,9 @@ main{
   min-height:18px
 }
 
-.hidden{display:none!important}
+.hidden{
+  display:none!important
+}
 
 .logout{
   border:1px solid #ffffff55;
@@ -387,6 +458,7 @@ main{
       </div>
 
       <div style="display:flex;align-items:center;gap:8px">
+
         <div class="live">
           <span class="dot"></span>
           Pedidos em tempo real
@@ -395,6 +467,7 @@ main{
         <button class="logout" id="logoutBtn">
           Sair
         </button>
+
       </div>
 
     </div>
@@ -451,13 +524,30 @@ let orders=[];
 let channel=null;
 let currentFilter='novos';
 
+/*
+  Pedidos que já estavam na lista antiga "Já impressos".
+
+  Se o sistema antigo salvava os IDs como array,
+  eles são considerados pedidos antigos e não aparecem
+  mais no painel.
+*/
 let printedMap=JSON.parse(
   localStorage.getItem('casa_do_crepe_printed_ids')||'{}'
 );
 
+let legacyPrintedIds=new Set();
+
 if(Array.isArray(printedMap)){
-  printedMap=Object.fromEntries(
-    printedMap.map(id=>[id,Date.now()])
+
+  legacyPrintedIds=new Set(
+    printedMap.map(id=>String(id))
+  );
+
+  printedMap={};
+
+  localStorage.setItem(
+    'casa_do_crepe_printed_ids',
+    '{}'
   );
 }
 
@@ -475,17 +565,19 @@ function cleanupPrinted(){
 
   for(const id of Object.keys(printedMap)){
 
-    if(now-Number(printedMap[id])>=PRINTED_TTL){
+    if(
+      now-Number(printedMap[id])
+      >=PRINTED_TTL
+    ){
 
       delete printedMap[id];
       changed=true;
-
     }
-
   }
 
-  if(changed)savePrinted();
-
+  if(changed){
+    savePrinted();
+  }
 }
 
 function markPrinted(id){
@@ -493,26 +585,21 @@ function markPrinted(id){
   printedMap[id]=Date.now();
 
   savePrinted();
-
 }
 
 function isPrinted(id){
 
   const t=Number(printedMap[id]);
 
-  return Number.isFinite(t)&&
-    Date.now()-t<PRINTED_TTL;
-
+  return Number.isFinite(t)
+    && Date.now()-t<PRINTED_TTL;
 }
 
 cleanupPrinted();
 
 setInterval(()=>{
-
   cleanupPrinted();
-
   render();
-
 },60000);
 
 const statusLabels={
@@ -552,7 +639,6 @@ function formatTime(v){
       timeStyle:'short'
     }
   );
-
 }
 
 function toast(t){
@@ -567,16 +653,23 @@ function toast(t){
     ()=>e.classList.remove('show'),
     3500
   );
-
 }
 
 function render(){
 
-  const fresh=orders.filter(
+  /*
+    Remove completamente da cozinha os pedidos que já
+    estavam em "Já impressos" antes da regra das 24h.
+  */
+  const visibleOrders=orders.filter(
+    o=>!legacyPrintedIds.has(String(o.id))
+  );
+
+  const fresh=visibleOrders.filter(
     o=>!isPrinted(o.id)
   );
 
-  const printed=orders.filter(
+  const printed=visibleOrders.filter(
     o=>isPrinted(o.id)
   );
 
@@ -600,7 +693,6 @@ function render(){
         :'<div class="empty">Nenhum pedido já impresso.</div>';
 
     return;
-
   }
 
   root.innerHTML=
@@ -610,7 +702,6 @@ function render(){
         currentFilter==='impressos'
       )
     ).join('');
-
 }
 
 function cleanItemName(value){
@@ -618,7 +709,6 @@ function cleanItemName(value){
   return String(value??'')
     .replace(/\s*\+\s*$/,'')
     .trim();
-
 }
 
 function printerText(value){
@@ -631,7 +721,6 @@ function printerText(value){
     .replace(/[úùûü]/gi,'u')
     .replace(/[ç]/gi,'c')
     .replace(/[ñ]/gi,'n');
-
 }
 
 function cleanPrintedItemName(name,category){
@@ -648,11 +737,9 @@ function cleanPrintedItemName(name,category){
         ''
       )
       .trim();
-
   }
 
   return text;
-
 }
 
 function card(o,printed){
@@ -664,7 +751,11 @@ function card(o,printed){
     .toUpperCase();
 
   return `
-  <article class="card ${!printed&&o.status==='novo'?'new':''}">
+  <article class="card ${
+    !printed&&o.status==='novo'
+      ?'new'
+      :''
+  }">
 
     <div class="cardhead">
 
@@ -707,27 +798,25 @@ function card(o,printed){
                 ${i.quantity}×
               </span>
 
-              ${esc(
-                cleanItemName(i.item_name)
-              )}
-
+              ${esc(cleanItemName(i.item_name))}
             </div>
 
             ${
-              Array.isArray(i.addons)&&i.addons.length
+              Array.isArray(i.addons)
+              &&i.addons.length
               ?`
                 <div class="addons">
                   Adicionais:
                   ${
                     i.addons
-                      .map(
-                        a=>esc(
-                          typeof a==='string'
-                            ?a
-                            :(a.name||'')
-                        )
+                    .map(
+                      a=>esc(
+                        typeof a==='string'
+                          ?a
+                          :(a.name||'')
                       )
-                      .join(', ')
+                    )
+                    .join(', ')
                   }
                 </div>
               `
@@ -741,8 +830,13 @@ function card(o,printed){
       </ul>
 
       <div class="total">
+
         <span>Total</span>
-        <span>${money(o.total)}</span>
+
+        <span>
+          ${money(o.total)}
+        </span>
+
       </div>
 
     </div>
@@ -775,14 +869,11 @@ function card(o,printed){
 
   </article>
   `;
-
 }
 
 async function printOrder(id){
 
-  const o=orders.find(
-    x=>x.id===id
-  );
+  const o=orders.find(x=>x.id===id);
 
   if(!o)return;
 
@@ -835,11 +926,10 @@ async function printOrder(id){
   (o.order_items||[]).forEach(i=>{
 
     const category=
-      (i.category||'').trim()||
-      'Itens';
+      (i.category||'').trim()
+      ||'Itens';
 
-    let group=
-      groupMap.get(category);
+    let group=groupMap.get(category);
 
     if(!group){
 
@@ -854,7 +944,6 @@ async function printOrder(id){
       );
 
       groups.push(group);
-
     }
 
     let name=
@@ -865,41 +954,44 @@ async function printOrder(id){
 
     let addons=
       Array.isArray(i.addons)
-        ?i.addons
-          .map(
-            a=>typeof a==='string'
-              ?a
-              :(a&&a.name)||''
-          )
-          .filter(Boolean)
-        :[];
+      ?i.addons
+        .map(
+          a=>typeof a==='string'
+            ?a
+            :(a&&a.name)||''
+        )
+        .filter(Boolean)
+      :[];
 
+    /*
+      Compatibilidade com pedidos antigos
+      que gravaram adicionais no nome usando "+".
+    */
     if(
-      !addons.length &&
-      name.includes(' + ')
+      !addons.length
+      &&name.includes(' + ')
     ){
 
       const parts=
         name.split(' + ');
 
-      name=
-        parts.shift().trim();
+      name=parts
+        .shift()
+        .trim();
 
       const legacyAddons=
-        parts.join(' + ').trim();
+        parts
+        .join(' + ')
+        .trim();
 
       if(legacyAddons){
 
         addons=
           legacyAddons
-            .split(',')
-            .map(
-              x=>x.trim()
-            )
-            .filter(Boolean);
-
+          .split(',')
+          .map(x=>x.trim())
+          .filter(Boolean);
       }
-
     }
 
     group.items.push({
@@ -911,10 +1003,11 @@ async function printOrder(id){
       name,
 
       subtotal:Number(
-        i.subtotal||
+        i.subtotal
+        ||
         (
-          (i.unit_price||0)*
-          (i.quantity||0)
+          (i.unit_price||0)
+          *(i.quantity||0)
         )
       ),
 
@@ -928,47 +1021,42 @@ async function printOrder(id){
     (group,index)=>{
 
       content.push({
-
         type:'text',
-
         text:
           printerText(
             group.category
           ).toUpperCase(),
-
         bold:true
-
       });
 
       group.items.forEach(
         item=>{
 
           content.push({
-
             type:'row',
 
             left:
-              `${item.quantity}x ${printerText(item.name)}`,
+              `${item.quantity}x ${
+                printerText(item.name)
+              }`,
 
             right:
               money(item.subtotal),
 
             bold:true
-
           });
 
           if(item.addons.length){
 
             content.push({
-
               type:'text',
 
               text:
-                'Adicionais: '+
+                'Adicionais: '
+                +
                 item.addons
                   .map(printerText)
                   .join(', ')
-
             });
 
           }
@@ -976,7 +1064,9 @@ async function printOrder(id){
         }
       );
 
-      if(index<groups.length-1){
+      if(
+        index<groups.length-1
+      ){
 
         content.push({
           type:'divider'
@@ -992,15 +1082,10 @@ async function printOrder(id){
   });
 
   content.push({
-
     type:'row',
-
     left:'TOTAL',
-
     right:money(o.total),
-
     bold:true
-
   });
 
   content.push({
@@ -1010,39 +1095,37 @@ async function printOrder(id){
 
   try{
 
-    const resp=
-      await fetch(
-        'http://localhost:9100/print',
-        {
-          method:'POST',
-          headers:{
-            'Content-Type':
-              'application/json'
-          },
-          body:JSON.stringify({
-            content,
-            paperWidth:58,
-            cut:true
-          })
-        }
-      );
+    const resp=await fetch(
+      'http://localhost:9100/print',
+      {
+        method:'POST',
 
-    if(!resp.ok){
+        headers:{
+          'Content-Type':
+            'application/json'
+        },
 
+        body:JSON.stringify({
+          content,
+          paperWidth:58,
+          cut:true
+        })
+      }
+    );
+
+    if(!resp.ok)
       throw new Error(
         'HTTP '+resp.status
       );
-
-    }
 
     markPrinted(id);
 
     render();
 
     toast(
-      '✓ Pedido #'+
-      shortId+
-      ' enviado para a impressora'
+      '✓ Pedido #'
+      +shortId
+      +' enviado para a impressora'
     );
 
   }catch(err){
@@ -1050,29 +1133,26 @@ async function printOrder(id){
     console.error(err);
 
     toast(
-      'Não conectou ao app de impressão. '+
-      'Abra o Cleanter e selecione a Mprinter-58MMB.'
+      'Não conectou ao app de impressão. '
+      +'Abra o Cleanter e selecione '
+      +'a Mprinter-58MMB.'
     );
 
   }
-
 }
 
 async function cancelOrder(id){
 
-  if(
-    !confirm(
-      'Cancelar este pedido?'
-    )
-  )return;
+  if(!confirm(
+    'Cancelar este pedido?'
+  ))return;
 
-  const {error}=
-    await db
-      .from('orders')
-      .update({
-        status:'cancelado'
-      })
-      .eq('id',id);
+  const {error}=await db
+    .from('orders')
+    .update({
+      status:'cancelado'
+    })
+    .eq('id',id);
 
   if(error){
 
@@ -1083,7 +1163,6 @@ async function cancelOrder(id){
     console.error(error);
 
     return;
-
   }
 
   orders=
@@ -1093,60 +1172,53 @@ async function cancelOrder(id){
 
   render();
 
-  toast(
-    'Pedido cancelado'
-  );
-
+  toast('Pedido cancelado');
 }
 
 async function load(){
 
-  const {data,error}=
-    await db
-      .from('orders')
-      .select(
-        'id,customer_name,address,total,status,created_at,order_items(id,category,item_name,quantity,unit_price,subtotal,addons)'
-      )
-      .neq(
-        'status',
-        'cancelado'
-      )
-      .order(
-        'created_at',
-        {
-          ascending:false
-        }
-      );
+  const {data,error}=await db
+    .from('orders')
+    .select(
+      'id,customer_name,address,total,status,created_at,order_items(id,category,item_name,quantity,unit_price,subtotal,addons)'
+    )
+    .neq(
+      'status',
+      'cancelado'
+    )
+    .order(
+      'created_at',
+      {
+        ascending:false
+      }
+    );
 
   if(error){
 
     document.getElementById(
       'orders'
     ).innerHTML=
-      '<div class="empty">'+
-      'Não foi possível carregar os pedidos. '+
-      'Verifique sua sessão e a conexão.'+
-      '</div>';
+      '<div class="empty">'
+      +'Não foi possível carregar os pedidos. '
+      +'Verifique sua sessão e a conexão.'
+      +'</div>';
 
     console.error(error);
 
     return;
-
   }
 
   orders=data||[];
 
   render();
-
 }
 
 async function setStatus(id,status){
 
-  const {error}=
-    await db
-      .from('orders')
-      .update({status})
-      .eq('id',id);
+  const {error}=await db
+    .from('orders')
+    .update({status})
+    .eq('id',id);
 
   if(error){
 
@@ -1157,104 +1229,90 @@ async function setStatus(id,status){
     console.error(error);
 
     return;
-
   }
 
-  const o=
-    orders.find(
-      x=>x.id===id
-    );
+  const o=orders.find(
+    x=>x.id===id
+  );
 
-  if(o)o.status=status;
+  if(o)
+    o.status=status;
 
   render();
 
   toast(
-    `Pedido atualizado: ${statusLabels[status]}`
+    `Pedido atualizado: ${
+      statusLabels[status]
+    }`
   );
-
 }
 
 async function startPanel(){
 
   document
     .getElementById('loginScreen')
-    .classList
-    .add('hidden');
+    .classList.add('hidden');
 
   document
     .getElementById('app')
-    .classList
-    .remove('hidden');
+    .classList.remove('hidden');
 
   await load();
 
-  if(channel){
-
+  if(channel)
     await db.removeChannel(
       channel
     );
 
-  }
+  channel=db
+    .channel('cozinha-pedidos')
 
-  channel=
-    db
-      .channel(
-        'cozinha-pedidos'
-      )
+    .on(
+      'postgres_changes',
+      {
+        event:'INSERT',
+        schema:'public',
+        table:'orders'
+      },
+      async()=>{
+        await load();
+        toast(
+          '🔔 Novo pedido recebido!'
+        );
+      }
+    )
 
-      .on(
-        'postgres_changes',
-        {
-          event:'INSERT',
-          schema:'public',
-          table:'orders'
-        },
-        async()=>{
-          await load();
+    .on(
+      'postgres_changes',
+      {
+        event:'UPDATE',
+        schema:'public',
+        table:'orders'
+      },
+      async()=>{
+        await load();
+      }
+    )
+
+    .subscribe(
+      status=>{
+        if(status==='SUBSCRIBED')
           toast(
-            '🔔 Novo pedido recebido!'
+            'Conectado ao tempo real'
           );
-        }
-      )
-
-      .on(
-        'postgres_changes',
-        {
-          event:'UPDATE',
-          schema:'public',
-          table:'orders'
-        },
-        async()=>{
-          await load();
-        }
-      )
-
-      .subscribe(
-        status=>{
-          if(
-            status==='SUBSCRIBED'
-          ){
-            toast(
-              'Conectado ao tempo real'
-            );
-          }
-        }
-      );
-
+      }
+    );
 }
 
 function showLogin(msg=''){
 
   document
     .getElementById('app')
-    .classList
-    .add('hidden');
+    .classList.add('hidden');
 
   document
     .getElementById('loginScreen')
-    .classList
-    .remove('hidden');
+    .classList.remove('hidden');
 
   document
     .getElementById('loginError')
@@ -1271,9 +1329,7 @@ function showLogin(msg=''){
     );
 
     channel=null;
-
   }
-
 }
 
 document
@@ -1297,12 +1353,9 @@ document
 
       const err=
         document
-          .getElementById(
-            'loginError'
-          );
+          .getElementById('loginError');
 
-      err.textContent=
-        'Entrando...';
+      err.textContent='Entrando...';
 
       const {error}=
         await db.auth
@@ -1319,11 +1372,9 @@ document
         console.error(error);
 
         return;
-
       }
 
       err.textContent='';
-
     }
   );
 
@@ -1334,9 +1385,7 @@ document
     e=>{
 
       const b=
-        e.target.closest(
-          'button'
-        );
+        e.target.closest('button');
 
       if(!b)return;
 
@@ -1356,7 +1405,6 @@ document
         b.dataset.filter;
 
       render();
-
     }
   );
 
@@ -1369,7 +1417,6 @@ document
       await db.auth.signOut();
 
       showLogin('');
-
     }
   );
 
@@ -1380,7 +1427,6 @@ db.auth.onAuthStateChange(
       startPanel();
     else
       showLogin('');
-
   }
 );
 
