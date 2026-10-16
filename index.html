@@ -966,12 +966,14 @@ async function printOrder(id){
     )
   });
 
-  content.push({
-    type:'text',
-    text:'Endereco: '+printerText(
-      displayAddress(o)||''
-    )
-  });
+  if(fulfillmentLabel(o)==='ENTREGA'){
+    content.push({
+      type:'text',
+      text:'Endereco: '+printerText(
+        displayAddress(o)||''
+      )
+    });
+  }
 
   content.push({
     type:'text',
@@ -1165,6 +1167,7 @@ async function printOrder(id){
       left:'Taxa de entrega',
       right:money(deliveryFee(o))
     });
+    content.push({type:'divider'});
   }
 
   content.push({
