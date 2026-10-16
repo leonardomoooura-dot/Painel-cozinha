@@ -1266,7 +1266,7 @@ async function load(){
   const {data,error}=await db
     .from('orders')
     .select(
-      'id,customer_name,address,total,status,created_at,fulfillment_type,payment_method,change_for,payment_brand,delivery_fee,delivery_neighborhood,order_items(id,category,item_name,quantity,unit_price,subtotal,addons)'
+      'id,customer_name,address,total,status,created_at,fulfillment_type,payment_method,change_for,payment_brand,delivery_fee,order_items(id,category,item_name,quantity,unit_price,subtotal,addons)'
     )
     .neq(
       'status',
