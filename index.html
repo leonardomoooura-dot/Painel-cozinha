@@ -708,7 +708,51 @@ function cleanItemName(value){
 
   return String(value??'')
     .replace(/\s*\+\s*$/,'')
+    .replace(/\s*\[Observação:\s*[\s\S]*?\]\s*$/i,'')
     .trim();
+}
+
+function itemObservation(value){
+  const match=String(value??'').match(/\[Observação:\s*([\s\S]*?)\]\s*$/i);
+  return match?match[1].trim():'';
+}
+
+function fulfillmentLabel(o){
+  const type=String(o.fulfillment_type||'').toLowerCase();
+  if(type==='pickup'||type==='retirada')return 'RETIRADA';
+  if(type==='delivery'||type==='entrega')return 'ENTREGA';
+  return String(o.address||'').toUpperCase().includes('RETIRADA')?'RETIRADA':'ENTREGA';
+}
+
+function displayAddress(o){
+  const raw=String(o.address||'').trim();
+  if(!raw || raw.toUpperCase().includes('RETIRADA')) return raw;
+  // O site salva o endereço como: bairro — rua e número.
+  const parts=raw.split(/\s+—\s+/);
+  const neighborhood=String(o.delivery_neighborhood||parts[0]||'').trim();
+  const street=String(parts.length>1?parts.slice(1).join(' — '):raw).trim();
+  if(neighborhood && street && neighborhood.toLowerCase()!==street.toLowerCase()) return `${street} - ${neighborhood}`;
+  return raw;
+}
+
+function deliveryFee(o){
+  const value=Number(o.delivery_fee||0);
+  return Number.isFinite(value)?value:0;
+}
+
+function paymentLabelForOrder(o){
+  const labels={
+    delivery_cash:'Dinheiro',
+    delivery_card:'Cartão',
+    site_pix:'Pix',
+    site_card:'Cartão'
+  };
+  let label=labels[o.payment_method]||String(o.payment_method||'Pagamento não informado');
+  const brands={visa:'Visa',mastercard:'Mastercard',elo:'Elo'};
+  if((o.payment_method==='delivery_card'||o.payment_method==='site_card')&&o.payment_brand){
+    label+=' — '+(brands[o.payment_brand]||o.payment_brand);
+  }
+  return label;
 }
 
 function printerText(value){
@@ -762,7 +806,7 @@ function card(o,printed){
       <div>
 
         <div class="orderid">
-          Pedido #${esc(shortId)}
+          Pedido #${esc(shortId)} — ${esc(fulfillmentLabel(o))}
         </div>
 
         <div class="time">
@@ -780,8 +824,13 @@ function card(o,printed){
       </div>
 
       <div class="address">
-        ${esc(o.address)}
+        ${esc(displayAddress(o))}
       </div>
+
+      <div class="address"><strong>Pagamento:</strong> ${esc(paymentLabelForOrder(o))}</div>
+      ${o.payment_method==='delivery_cash' && o.change_for!=null
+        ? `<div class="address"><strong>Troco para:</strong> ${money(o.change_for)}</div>`
+        : ''}
 
       <ul class="items">
 
@@ -800,6 +849,8 @@ function card(o,printed){
 
               ${esc(cleanItemName(i.item_name))}
             </div>
+
+            ${itemObservation(i.item_name)?`<div class="addons"><strong>Observação:</strong> ${esc(itemObservation(i.item_name))}</div>`:''}
 
             ${
               Array.isArray(i.addons)
@@ -828,6 +879,12 @@ function card(o,printed){
         `).join('')}
 
       </ul>
+
+      ${fulfillmentLabel(o)==='ENTREGA' ? `
+        <div class="address" style="display:flex;justify-content:space-between;margin-top:12px;color:var(--text)">
+          <strong>Taxa de entrega</strong><strong>${money(deliveryFee(o))}</strong>
+        </div>
+      ` : ''}
 
       <div class="total">
 
@@ -893,7 +950,7 @@ async function printOrder(id){
 
   content.push({
     type:'text',
-    text:'PEDIDO #'+shortId,
+    text:'PEDIDO #'+shortId+' — '+fulfillmentLabel(o),
     align:'center',
     bold:true
   });
@@ -912,9 +969,21 @@ async function printOrder(id){
   content.push({
     type:'text',
     text:'Endereco: '+printerText(
-      o.address||''
+      displayAddress(o)||''
     )
   });
+
+  content.push({
+    type:'text',
+    text:'Pagamento: '+printerText(paymentLabelForOrder(o))
+  });
+
+  if(o.payment_method==='delivery_cash' && o.change_for!=null){
+    content.push({
+      type:'text',
+      text:'Troco para: '+money(o.change_for)
+    });
+  }
 
   content.push({
     type:'divider'
@@ -951,6 +1020,7 @@ async function printOrder(id){
         i.item_name,
         i.category
       );
+    const observation=itemObservation(i.item_name);
 
     let addons=
       Array.isArray(i.addons)
@@ -1001,6 +1071,7 @@ async function printOrder(id){
       ),
 
       name,
+      observation,
 
       subtotal:Number(
         i.subtotal
@@ -1061,6 +1132,13 @@ async function printOrder(id){
 
           }
 
+          if(item.observation){
+            content.push({
+              type:'text',
+              text:'Observacao: '+printerText(item.observation)
+            });
+          }
+
         }
       );
 
@@ -1080,6 +1158,14 @@ async function printOrder(id){
   content.push({
     type:'divider'
   });
+
+  if(fulfillmentLabel(o)==='ENTREGA'){
+    content.push({
+      type:'row',
+      left:'Taxa de entrega',
+      right:money(deliveryFee(o))
+    });
+  }
 
   content.push({
     type:'row',
@@ -1180,7 +1266,7 @@ async function load(){
   const {data,error}=await db
     .from('orders')
     .select(
-      'id,customer_name,address,total,status,created_at,order_items(id,category,item_name,quantity,unit_price,subtotal,addons)'
+      'id,customer_name,address,total,status,created_at,fulfillment_type,payment_method,change_for,payment_brand,delivery_fee,delivery_neighborhood,order_items(id,category,item_name,quantity,unit_price,subtotal,addons)'
     )
     .neq(
       'status',
