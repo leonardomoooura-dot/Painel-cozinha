@@ -460,17 +460,13 @@ main{
       <div style="display:flex;align-items:center;gap:8px">
 
         <div class="live">
-  <span class="dot"></span>
-  Pedidos em tempo real
-</div>
+          <span class="dot"></span>
+          Pedidos em tempo real
+        </div>
 
-<button class="logout" id="notifyBtn">
-  🔔 Ativar notificações
-</button>
-
-<button class="logout" id="logoutBtn">
-  Sair
-</button>
+        <button class="logout" id="logoutBtn">
+          Sair
+        </button>
 
       </div>
 
@@ -528,83 +524,12 @@ let orders=[];
 let channel=null;
 let currentFilter='novos';
 
-/*
-  Pedidos que já estavam na lista antiga "Já impressos".
-
-  Se o sistema antigo salvava os IDs como array,
-  eles são considerados pedidos antigos e não aparecem
-  mais no painel.
-*/
-let printedMap=JSON.parse(
-  localStorage.getItem('casa_do_crepe_printed_ids')||'{}'
-);
-
-let legacyPrintedIds=new Set();
-
-if(Array.isArray(printedMap)){
-
-  legacyPrintedIds=new Set(
-    printedMap.map(id=>String(id))
-  );
-
-  printedMap={};
-
-  localStorage.setItem(
-    'casa_do_crepe_printed_ids',
-    '{}'
-  );
+function isPrinted(order){
+  if(!order || !order.printed_at) return false;
+  const printedAt=new Date(order.printed_at).getTime();
+  return Number.isFinite(printedAt)
+    && Date.now()-printedAt<PRINTED_TTL;
 }
-
-function savePrinted(){
-  localStorage.setItem(
-    'casa_do_crepe_printed_ids',
-    JSON.stringify(printedMap)
-  );
-}
-
-function cleanupPrinted(){
-
-  const now=Date.now();
-  let changed=false;
-
-  for(const id of Object.keys(printedMap)){
-
-    if(
-      now-Number(printedMap[id])
-      >=PRINTED_TTL
-    ){
-
-      delete printedMap[id];
-      changed=true;
-    }
-  }
-
-  if(changed){
-    savePrinted();
-  }
-}
-
-function markPrinted(id){
-
-  printedMap[id]=Date.now();
-
-  savePrinted();
-}
-
-function isPrinted(id){
-
-  const t=Number(printedMap[id]);
-
-  return Number.isFinite(t)
-    && Date.now()-t<PRINTED_TTL;
-}
-
-cleanupPrinted();
-
-setInterval(()=>{
-  cleanupPrinted();
-  render();
-},60000);
 
 const statusLabels={
   novo:'Novo',
@@ -646,80 +571,6 @@ function formatTime(v){
 }
 
 function toast(t){
-const VAPID_PUBLIC_KEY =
-  'BDRkhw65Bv9--u47qWXbkRTWHXFMMjQQ_OfHFlzRcBs7UaouKGQN4ulYYCyODdDHMqXaEbqMwiRewnybWs75ROA';
-
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding)
-    .replace(/-/g, '+')
-    .replace(/_/g, '/');
-
-  const raw = atob(base64);
-  return Uint8Array.from(raw, char => char.charCodeAt(0));
-}
-
-async function enableNotifications() {
-  const button = document.getElementById('notifyBtn');
-
-  try {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      throw new Error('Este navegador não oferece suporte a notificações push.');
-    }
-
-    if (!('Notification' in window)) {
-      throw new Error('Notificações não são suportadas neste navegador.');
-    }
-
-    const { data: { user }, error: userError } = await db.auth.getUser();
-
-    if (userError || !user) {
-      throw new Error('Entre no painel antes de ativar as notificações.');
-    }
-
-    const permission = await Notification.requestPermission();
-
-    if (permission !== 'granted') {
-      throw new Error('Permissão de notificações não concedida.');
-    }
-
-    const registration = await navigator.serviceWorker.register('/sw.js');
-    await navigator.serviceWorker.ready;
-
-    let subscription = await registration.pushManager.getSubscription();
-
-    if (!subscription) {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-      });
-    }
-
-    const { error } = await db
-      .from('push_subscriptions')
-      .upsert({
-        user_id: user.id,
-        endpoint: subscription.endpoint,
-        subscription: subscription.toJSON(),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'endpoint' });
-
-    if (error) throw error;
-
-    button.textContent = '🔔 Notificações ativadas';
-    toast('Este celular foi registrado para receber notificações.');
-
-  } catch (error) {
-    console.error('Erro ao ativar notificações:', error);
-    toast(error.message || 'Não foi possível ativar as notificações.');
-  }
-}
-
-document.getElementById('notifyBtn').addEventListener(
-  'click',
-  enableNotifications
-);
-
 
   const e=document.getElementById('toast');
 
@@ -739,17 +590,8 @@ function render(){
     Remove completamente da cozinha os pedidos que já
     estavam em "Já impressos" antes da regra das 24h.
   */
-  const visibleOrders=orders.filter(
-    o=>!legacyPrintedIds.has(String(o.id))
-  );
-
-  const fresh=visibleOrders.filter(
-    o=>!isPrinted(o.id)
-  );
-
-  const printed=visibleOrders.filter(
-    o=>isPrinted(o.id)
-  );
+  const fresh=orders.filter(o=>!isPrinted(o));
+  const printed=orders.filter(o=>isPrinted(o));
 
   const list=
     currentFilter==='novos'
@@ -1285,14 +1127,29 @@ async function printOrder(id){
         'HTTP '+resp.status
       );
 
-    markPrinted(id);
+    // Registra a impressão no banco compartilhado para sincronizar
+    // o estado "Já impressos" entre todos os celulares.
+    const printedAt=new Date().toISOString();
+    const {error:saveError}=await db
+      .from('orders')
+      .update({printed_at:printedAt})
+      .eq('id',id);
+
+    if(saveError){
+      console.error('Falha ao salvar o estado de impressão:',saveError);
+      toast('Pedido impresso, mas não foi possível sincronizar. Execute o SQL de atualização do painel.');
+      return;
+    }
+
+    const localOrder=orders.find(x=>x.id===id);
+    if(localOrder) localOrder.printed_at=printedAt;
 
     render();
 
     toast(
       '✓ Pedido #'
       +shortId
-      +' enviado para a impressora'
+      +' impresso e sincronizado'
     );
 
   }catch(err){
@@ -1347,7 +1204,7 @@ async function load(){
   const {data,error}=await db
     .from('orders')
     .select(
-      'id,customer_name,address,total,status,created_at,fulfillment_type,payment_method,change_for,payment_brand,delivery_fee,order_items(id,category,item_name,quantity,unit_price,subtotal,addons)'
+      'id,customer_name,address,total,status,created_at,printed_at,fulfillment_type,payment_method,change_for,payment_brand,delivery_fee,order_items(id,category,item_name,quantity,unit_price,subtotal,addons)'
     )
     .neq(
       'status',
@@ -1431,6 +1288,19 @@ async function startPanel(){
       channel
     );
 
+  // Sincronização entre celulares: o Realtime é mantido, mas também
+  // consultamos o banco periodicamente para refletir printed_at caso
+  // algum dispositivo não receba o evento UPDATE.
+  if(window.cozinhaSyncInterval)
+    clearInterval(window.cozinhaSyncInterval);
+  window.cozinhaSyncInterval = setInterval(async()=>{
+    try {
+      if(document.visibilityState === 'visible') await load();
+    } catch(err) {
+      console.error('Falha na sincronização periódica dos pedidos:', err);
+    }
+  }, 5000);
+
   channel=db
     .channel('cozinha-pedidos')
 
@@ -1496,6 +1366,11 @@ function showLogin(msg=''){
     );
 
     channel=null;
+  }
+
+  if(window.cozinhaSyncInterval){
+    clearInterval(window.cozinhaSyncInterval);
+    window.cozinhaSyncInterval=null;
   }
 }
 
