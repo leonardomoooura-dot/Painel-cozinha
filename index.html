@@ -463,7 +463,9 @@ main{
           <span class="dot"></span>
           Pedidos em tempo real
         </div>
-
+<button class="notify-btn" id="notifyBtn" type="button">
+  🔔 Ativar notificações
+</button>
         <button class="logout" id="logoutBtn">
           Sair
         </button>
@@ -519,7 +521,7 @@ const db=window.supabase.createClient(
 );
 
 const PRINTED_TTL=24*60*60*1000;
-
+const VAPID_PUBLIC_KEY='BDRkhw65Bv9--u47qWXbkRTWHXFMMjQQ_OfHFlzRcBs7UaouKGQN4ulYYCyODdDHMqXaEbqMwiRewnybWs75ROA';
 let orders=[];
 let channel=null;
 let currentFilter='novos';
@@ -1340,7 +1342,49 @@ async function startPanel(){
       }
     );
 }
+function urlBase64ToUint8Array(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(base64);
+  return Uint8Array.from([...raw].map(char=>char.charCodeAt(0)));
+}
 
+async function activateNotifications(){
+  const button=document.getElementById('notifyBtn');
+  if(!button)return;
+  button.disabled=true;
+  try{
+    if(!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)){
+      throw new Error('Este navegador não oferece suporte a notificações push.');
+    }
+    const {data:{user},error:userError}=await db.auth.getUser();
+    if(userError || !user)throw new Error('Entre novamente no painel.');
+    const permission=await Notification.requestPermission();
+    if(permission!=='granted')throw new Error('Permita notificações nas configurações do navegador.');
+    const registration=await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    let subscription=await registration.pushManager.getSubscription();
+    if(!subscription){
+      subscription=await registration.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    const {error}=await db.from('push_subscriptions').upsert({
+      user_id:user.id,
+      endpoint:subscription.endpoint,
+      subscription:subscription.toJSON()
+    },{onConflict:'endpoint'});
+    if(error)throw error;
+    button.textContent='🔔 Notificações ativadas';
+    alert('Notificações ativadas neste aparelho!');
+  }catch(err){
+    console.error(err);
+    alert(err.message||'Não foi possível ativar as notificações.');
+  }finally{
+    button.disabled=false;
+  }
+}
 function showLogin(msg=''){
 
   document
@@ -1449,7 +1493,7 @@ document
       render();
     }
   );
-
+document.getElementById('notifyBtn').addEventListener('click',activateNotifications);
 document
   .getElementById('logoutBtn')
   .addEventListener(
