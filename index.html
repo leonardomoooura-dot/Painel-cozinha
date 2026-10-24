@@ -423,6 +423,37 @@ main{
   font-weight:800;
   cursor:pointer
 }
+
+.notify-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  border:1px solid #ffe58a;
+  background:linear-gradient(135deg,#ffe878,#f5c928);
+  color:#55200f;
+  border-radius:999px;
+  padding:10px 14px;
+  font-weight:900;
+  font-size:13px;
+  box-shadow:0 3px 10px #0002;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:transform .15s ease,box-shadow .15s ease,filter .15s ease
+}
+.notify-btn:hover{filter:brightness(1.04);box-shadow:0 5px 14px #0003;transform:translateY(-1px)}
+.notify-btn:active{transform:translateY(0)}
+.notify-btn:disabled{opacity:.65;cursor:wait;transform:none}
+.notify-btn.is-active{
+  background:linear-gradient(135deg,#dcfce7,#86efac);
+  border-color:#bbf7d0;
+  color:#14532d
+}
+@media(max-width:720px){
+  .head{flex-wrap:wrap}
+  .head>div:last-child{flex-wrap:wrap;justify-content:flex-end}
+  .notify-btn,.logout{font-size:12px;padding:9px 11px}
+}
 </style>
 </head>
 
@@ -520,17 +551,14 @@ const db=window.supabase.createClient(
   SUPABASE_PUBLISHABLE_KEY
 );
 
-const PRINTED_TTL=24*60*60*1000;
 const VAPID_PUBLIC_KEY='BDRkhw65Bv9--u47qWXbkRTWHXFMMjQQ_OfHFlzRcBs7UaouKGQN4ulYYCyODdDHMqXaEbqMwiRewnybWs75ROA';
 let orders=[];
 let channel=null;
 let currentFilter='novos';
 
 function isPrinted(order){
-  if(!order || !order.printed_at) return false;
-  const printedAt=new Date(order.printed_at).getTime();
-  return Number.isFinite(printedAt)
-    && Date.now()-printedAt<PRINTED_TTL;
+  // A impressão é um estado persistente no banco; não expira após 24 horas.
+  return Boolean(order && order.printed_at && Number.isFinite(new Date(order.printed_at).getTime()));
 }
 
 const statusLabels={
@@ -732,7 +760,7 @@ function card(o,printed){
         </div>
 
         <div class="time">
-          ${formatTime(o.created_at)}
+          <strong>Pedido feito em:</strong> ${esc(formatTime(o.created_at))}
         </div>
 
       </div>
@@ -875,6 +903,11 @@ async function printOrder(id){
     text:'PEDIDO #'+shortId+' — '+fulfillmentLabel(o),
     align:'center',
     bold:true
+  });
+
+  content.push({
+    type:'text',
+    text:'Pedido feito em: '+printerText(formatTime(o.created_at))
   });
 
   content.push({
@@ -1283,6 +1316,7 @@ async function startPanel(){
     .getElementById('app')
     .classList.remove('hidden');
 
+  await syncNotificationState();
   await load();
 
   if(channel)
@@ -1349,6 +1383,48 @@ function urlBase64ToUint8Array(base64String){
   return Uint8Array.from([...raw].map(char=>char.charCodeAt(0)));
 }
 
+async function syncNotificationState(){
+  const button=document.getElementById('notifyBtn');
+  if(!button)return;
+  if(!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)){
+    button.textContent='🔔 Notificações indisponíveis';
+    button.disabled=true;
+    return;
+  }
+  if(Notification.permission==='denied'){
+    button.textContent='🔔 Permitir nas configurações';
+    button.classList.remove('is-active');
+    return;
+  }
+  try{
+    if(Notification.permission==='granted'){
+      const registration=await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      const subscription=await registration.pushManager.getSubscription();
+      if(subscription){
+        const {data:{user},error:userError}=await db.auth.getUser();
+        if(user && !userError){
+          const {error}=await db.from('push_subscriptions').upsert({
+            user_id:user.id,
+            endpoint:subscription.endpoint,
+            subscription:subscription.toJSON()
+          },{onConflict:'endpoint'});
+          if(error)throw error;
+          button.textContent='✓ Notificações ativadas';
+          button.classList.add('is-active');
+          button.title='As notificações estão ativadas neste aparelho';
+          return;
+        }
+      }
+    }
+  }catch(err){
+    console.error('Não foi possível verificar a inscrição push:',err);
+  }
+  button.textContent='🔔 Ativar notificações';
+  button.classList.remove('is-active');
+  button.title='Ativar notificações neste aparelho';
+}
+
 async function activateNotifications(){
   const button=document.getElementById('notifyBtn');
   if(!button)return;
@@ -1376,13 +1452,17 @@ async function activateNotifications(){
       subscription:subscription.toJSON()
     },{onConflict:'endpoint'});
     if(error)throw error;
-    button.textContent='🔔 Notificações ativadas';
-    alert('Notificações ativadas neste aparelho!');
+    button.textContent='✓ Notificações ativadas';
+    button.classList.add('is-active');
+    button.title='As notificações estão ativadas neste aparelho';
+    toast('Notificações ativadas neste aparelho!');
   }catch(err){
     console.error(err);
+    toast(err.message||'Não foi possível ativar as notificações.');
     alert(err.message||'Não foi possível ativar as notificações.');
   }finally{
     button.disabled=false;
+    await syncNotificationState();
   }
 }
 function showLogin(msg=''){
