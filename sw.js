@@ -18,9 +18,11 @@ self.addEventListener('push', event => {
       body: data.body,
       icon: '/icon-192.png',
       badge: '/icon-192.png',
-      tag: 'casa-do-crepe-novo-pedido',
+      tag: data.tag || 'casa-do-crepe-novo-pedido',
       renotify: true,
-      data: { url: '/' }
+      requireInteraction: true,
+      vibrate: [300, 150, 300, 150, 300],
+      data: { url: data.url || '/' }
     })
   );
 });
@@ -43,3 +45,7 @@ self.addEventListener('notificationclick', event => {
     })
   );
 });
+
+// Atualiza o service worker nos celulares assim que houver uma versão nova.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
