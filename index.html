@@ -657,9 +657,16 @@ function render(){
 function cleanItemName(value){
 
   return String(value??'')
+    .replace(/\s*\(promo[çc][aã]o[^)]*\)\s*$/i,'')
     .replace(/\s*\+\s*$/,'')
     .replace(/\s*\[Observação:\s*[\s\S]*?\]\s*$/i,'')
+    .replace(/\s*\(promo[çc][aã]o[^)]*\)\s*$/i,'')
     .trim();
+}
+
+// Telefone do cliente: lê a coluna customer_phone assim que ela existir no banco.
+function phoneForOrder(o){
+  return String(o.customer_phone??o.phone??o.telefone??'').trim();
 }
 
 function itemObservation(value){
@@ -781,6 +788,7 @@ function card(o,printed){
       ${o.payment_method==='delivery_cash' && o.change_for!=null
         ? `<div class="address"><strong>Troco para:</strong> ${money(o.change_for)}</div>`
         : ''}
+      <div class="address"><strong>Telefone:</strong> ${esc(phoneForOrder(o))}</div>
 
       <ul class="items">
 
@@ -941,6 +949,11 @@ async function printOrder(id){
       text:'Troco para: '+money(o.change_for)
     });
   }
+
+  content.push({
+    type:'text',
+    text:'Telefone: '+printerText(phoneForOrder(o))
+  });
 
   content.push({
     type:'divider'
@@ -1239,7 +1252,7 @@ async function load(){
   const {data,error}=await db
     .from('orders')
     .select(
-      'id,customer_name,address,total,status,created_at,printed_at,fulfillment_type,payment_method,change_for,payment_brand,delivery_fee,order_items(id,category,item_name,quantity,unit_price,subtotal,addons)'
+      '*,order_items(id,category,item_name,quantity,unit_price,subtotal,addons)'
     )
     .neq(
       'status',
