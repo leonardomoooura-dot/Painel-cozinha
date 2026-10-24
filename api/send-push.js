@@ -98,7 +98,9 @@ module.exports = async function handler(req, res) {
     const payload = JSON.stringify({
       title: 'Novo pedido recebido',
       body: 'Um novo pedido chegou à cozinha.',
-      url: '/'
+      url: '/',
+      // Um aviso por pedido (não substitui o anterior).
+      tag: 'pedido-' + event.record.id
     });
 
     // Envia para os aparelhos em paralelo.
@@ -112,15 +114,25 @@ module.exports = async function handler(req, res) {
           await webpush.sendNotification(
             item.subscription,
             payload,
-            { TTL: 60 * 60 }
+            {
+              // Prioridade ALTA: o Android entrega na hora, mesmo com o
+              // celular parado/em segundo plano (modo Soneca/Doze). Sem isso,
+              // o aviso fica esperando até o Chrome ser aberto.
+              urgency: 'high',
+              // Se o aparelho ficar sem internet, tenta por até 2 horas.
+              TTL: 2 * 60 * 60
+            }
           );
 
           return {
             sent: true
           };
         } catch (err) {
+          let host = '';
+          try { host = new URL(item.endpoint).host; } catch (_) {}
           console.error(
             'Falha no envio push:',
+            host,
             err.statusCode || '',
             err.message || 'Erro desconhecido'
           );
