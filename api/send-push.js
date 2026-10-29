@@ -1,6 +1,89 @@
-
+const crypto = require('crypto');
 const webpush = require('web-push');
 const { createClient } = require('@supabase/supabase-js');
+
+// ---------------------------------------------------------------------------
+// Ajustes de entrega
+// ---------------------------------------------------------------------------
+const MAX_ATTEMPTS = 3;            // tentativas por aparelho
+const ATTEMPT_TIMEOUT_MS = 3500;   // tempo máximo de cada tentativa
+const RETRY_CUTOFF_MS = 5500;      // depois disso não começa nova tentativa (Vercel Hobby: 10 s)
+const TTL_SECONDS = 2 * 60 * 60;   // se o aparelho estiver sem internet, tenta por até 2 horas
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+// Comparação do segredo sem vazar informação pelo tempo de resposta.
+function safeEqual(a, b) {
+  const x = Buffer.from(String(a || ''));
+  const y = Buffer.from(String(b || ''));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
+// Vale tentar de novo: limite de envios (429), erro do servidor de push (5xx)
+// ou falha de rede/tempo esgotado (sem statusCode).
+function isRetryable(err) {
+  const code = err && err.statusCode;
+  return !code || code === 429 || code >= 500;
+}
+
+function retryDelay(err, attempt) {
+  const retryAfter = Number(err && err.headers && err.headers['retry-after']);
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return Math.min(retryAfter * 1000, 2000);
+  }
+  return attempt * 600;
+}
+
+async function sendWithRetry(subscription, payload, startedAt) {
+  let lastError = null;
+  let attempts = 0;
+
+  while (attempts < MAX_ATTEMPTS) {
+    attempts += 1;
+
+    try {
+      await webpush.sendNotification(subscription, payload, {
+        // Prioridade ALTA: o Android entrega na hora, mesmo com o celular
+        // parado/em segundo plano (modo Soneca/Doze).
+        urgency: 'high',
+        TTL: TTL_SECONDS,
+        timeout: ATTEMPT_TIMEOUT_MS
+      });
+
+      return { sent: true, attempts };
+    } catch (err) {
+      lastError = err;
+
+      if (
+        !isRetryable(err) ||
+        attempts >= MAX_ATTEMPTS ||
+        Date.now() - startedAt > RETRY_CUTOFF_MS
+      ) {
+        break;
+      }
+
+      await sleep(retryDelay(err, attempts));
+    }
+  }
+
+  return { sent: false, attempts, error: lastError };
+}
+
+function formatMoney(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? 'R$ ' + n.toFixed(2).replace('.', ',') : '';
+}
+
+function buildMessage(record) {
+  const name = String(record.customer_name || '').trim();
+  const kind = record.fulfillment_type === 'pickup' ? 'Retirada' : 'Entrega';
+  const total = formatMoney(record.total);
+  const paid = record.payment_method === 'site_pix' ? 'Pix' : '';
+
+  const details = [name, kind, total, paid].filter(Boolean).join(' • ');
+
+  return details || 'Um novo pedido chegou à cozinha.';
+}
 
 module.exports = async function handler(req, res) {
   // Aceita somente requisições POST.
@@ -13,7 +96,7 @@ module.exports = async function handler(req, res) {
 
   if (
     !secret ||
-    req.headers.authorization !== `Bearer ${secret}`
+    !safeEqual(req.headers.authorization, `Bearer ${secret}`)
   ) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -38,30 +121,23 @@ module.exports = async function handler(req, res) {
     'VAPID_PRIVATE_KEY'
   ];
 
-  const missingEnv = requiredEnv.filter(
-    name => !process.env[name]
-  );
+  const missingEnv = requiredEnv.filter(name => !process.env[name]);
 
   if (missingEnv.length > 0) {
-    console.error(
-      'Variáveis de ambiente ausentes:',
-      missingEnv.join(', ')
-    );
+    console.error('Variáveis de ambiente ausentes:', missingEnv.join(', '));
 
     return res.status(500).json({
       error: 'Server configuration incomplete'
     });
   }
 
+  const startedAt = Date.now();
+
   try {
     const supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY,
-      {
-        auth: {
-          persistSession: false
-        }
-      }
+      { auth: { persistSession: false } }
     );
 
     webpush.setVapidDetails(
@@ -76,10 +152,7 @@ module.exports = async function handler(req, res) {
       .select('id, endpoint, subscription');
 
     if (error) {
-      console.error(
-        'Erro ao buscar inscrições:',
-        error.message
-      );
+      console.error('Erro ao buscar inscrições:', error.message);
 
       return res.status(500).json({
         error: 'Subscription lookup failed'
@@ -87,6 +160,8 @@ module.exports = async function handler(req, res) {
     }
 
     if (!subscriptions || subscriptions.length === 0) {
+      console.warn('Novo pedido, mas nenhum aparelho está inscrito.');
+
       return res.status(200).json({
         ok: true,
         sent: 0,
@@ -97,87 +172,81 @@ module.exports = async function handler(req, res) {
 
     const payload = JSON.stringify({
       title: 'Novo pedido recebido',
-      body: 'Um novo pedido chegou à cozinha.',
+      body: buildMessage(event.record),
       url: '/',
       // Um aviso por pedido (não substitui o anterior).
       tag: 'pedido-' + event.record.id
     });
 
-    // Envia para os aparelhos em paralelo.
+    // Envia para todos os aparelhos ao mesmo tempo. Um aparelho com problema
+    // nunca atrasa nem impede o envio para os outros.
     const results = await Promise.all(
       subscriptions.map(async item => {
-        try {
-          if (!item.subscription) {
-            throw new Error('Inscrição sem dados');
-          }
+        let host = '';
+        try { host = new URL(item.endpoint).host; } catch (_) {}
 
-          await webpush.sendNotification(
-            item.subscription,
-            payload,
-            {
-              // Prioridade ALTA: o Android entrega na hora, mesmo com o
-              // celular parado/em segundo plano (modo Soneca/Doze). Sem isso,
-              // o aviso fica esperando até o Chrome ser aberto.
-              urgency: 'high',
-              // Se o aparelho ficar sem internet, tenta por até 2 horas.
-              TTL: 2 * 60 * 60
-            }
-          );
-
-          return {
-            sent: true
-          };
-        } catch (err) {
-          let host = '';
-          try { host = new URL(item.endpoint).host; } catch (_) {}
-          console.error(
-            'Falha no envio push:',
-            host,
-            err.statusCode || '',
-            err.message || 'Erro desconhecido'
-          );
-
-          // Remove inscrições expiradas ou que não existem mais.
-          if (
-            err.statusCode === 404 ||
-            err.statusCode === 410
-          ) {
-            const { error: deleteError } = await supabase
-              .from('push_subscriptions')
-              .delete()
-              .eq('id', item.id);
-
-            if (deleteError) {
-              console.error(
-                'Erro ao remover inscrição expirada:',
-                deleteError.message
-              );
-            }
-          }
-
-          return {
-            sent: false,
-            statusCode: err.statusCode || null
-          };
+        if (!item.subscription) {
+          console.error('Inscrição sem dados:', item.id);
+          return { id: item.id, sent: false, statusCode: null };
         }
+
+        const result = await sendWithRetry(
+          item.subscription,
+          payload,
+          startedAt
+        );
+
+        if (result.sent) {
+          if (result.attempts > 1) {
+            console.warn(
+              `Push entregue em ${result.attempts} tentativas:`,
+              host
+            );
+          }
+
+          return { id: item.id, sent: true, statusCode: 201 };
+        }
+
+        const err = result.error || {};
+        const statusCode = err.statusCode || null;
+
+        console.error(
+          'Falha no envio push:',
+          host,
+          statusCode || '',
+          err.message || 'Erro desconhecido',
+          `(${result.attempts} tentativa(s))`
+        );
+
+        // Remove inscrições que não existem mais. O aparelho se recadastra
+        // sozinho na próxima vez que o painel for aberto nele.
+        if (statusCode === 404 || statusCode === 410) {
+          const { error: deleteError } = await supabase
+            .from('push_subscriptions')
+            .delete()
+            .eq('id', item.id);
+
+          if (deleteError) {
+            console.error(
+              'Erro ao remover inscrição expirada:',
+              deleteError.message
+            );
+          }
+        }
+
+        return { id: item.id, sent: false, statusCode };
       })
     );
 
-    const sent = results.filter(
-      result => result.sent
-    ).length;
-
+    const sent = results.filter(r => r.sent).length;
     const failed = results.length - sent;
 
     console.log(
-      `Notificações: ${sent} enviadas; ${failed} falharam.`
+      `Notificações: ${sent} enviadas; ${failed} falharam; ` +
+      `${Date.now() - startedAt} ms.`
     );
 
-    return res.status(200).json({
-      ok: true,
-      sent,
-      failed
-    });
+    return res.status(200).json({ ok: true, sent, failed });
   } catch (err) {
     console.error(
       'Erro interno no envio de notificações:',
