@@ -19,7 +19,7 @@ self.addEventListener('push', event => {
   const options = {
     body: data.body,
     icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    badge: '/badge-96.png',
     // Um aviso por pedido; o tag não repete entre pedidos diferentes.
     tag: data.tag || 'casa-do-crepe-novo-pedido',
     renotify: true,
@@ -78,6 +78,10 @@ self.addEventListener('notificationclick', event => {
     })
   );
 });
+
+// Necessário para o Chrome oferecer "Instalar app". Não altera nada: toda
+// requisição continua indo direto para a rede, como antes.
+self.addEventListener('fetch', () => {});
 
 // Atualiza o service worker nos celulares assim que houver uma versão nova.
 self.addEventListener('install', () => self.skipWaiting());
