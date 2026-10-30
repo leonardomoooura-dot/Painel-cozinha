@@ -458,6 +458,17 @@ main{
   .head>div:last-child{flex-wrap:wrap;justify-content:flex-end}
   .notify-btn,.logout{font-size:12px;padding:9px 11px}
 }
+
+/* Cabeçalho: botão de notificações sempre no canto superior direito */
+.head{display:grid;grid-template-columns:1fr auto;align-items:start;gap:10px 12px}
+.head .head-title{grid-column:1;grid-row:1;min-width:0}
+.head>.notify-btn{grid-column:2;grid-row:1;justify-self:end;align-self:start;white-space:nowrap}
+header .head>.head-tools{grid-column:1 / -1;grid-row:2;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+@media(min-width:721px){
+  .head{grid-template-columns:1fr auto auto;align-items:center}
+  .head>.notify-btn{grid-column:3;grid-row:1;align-self:center}
+  header .head>.head-tools{grid-column:2;grid-row:1;justify-content:flex-end}
+}
 </style>
 </head>
 
@@ -487,20 +498,22 @@ main{
   <header>
     <div class="head">
 
-      <div>
+      <div class="head-title">
         <div class="title">Casa do Crepe</div>
         <div class="sub">Painel da cozinha</div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:8px">
+      <button class="notify-btn" id="notifyBtn" type="button">
+        🔔 Ativar notificações
+      </button>
+
+      <div class="head-tools">
 
         <div class="live">
           <span class="dot"></span>
           Pedidos em tempo real
         </div>
-<button class="notify-btn" id="notifyBtn" type="button">
-  🔔 Ativar notificações
-</button>
+
         <button class="logout" id="logoutBtn">
           Sair
         </button>
@@ -560,9 +573,23 @@ let orders=[];
 let channel=null;
 let currentFilter='novos';
 
+const PRINTED_TTL=24*60*60*1000;
+
+function printedTime(order){
+  if(!order||!order.printed_at)return null;
+  const t=new Date(order.printed_at).getTime();
+  return Number.isFinite(t)?t:null;
+}
+
+// Pedido com printed_at preenchido é SEMPRE "impresso" (nunca volta para "Novos").
 function isPrinted(order){
-  // A impressão é um estado persistente no banco; não expira após 24 horas.
-  return Boolean(order && order.printed_at && Number.isFinite(new Date(order.printed_at).getTime()));
+  return printedTime(order)!==null;
+}
+
+// Passadas 24h da impressão, o pedido sai da tela (continua guardado no banco).
+function printedExpired(order){
+  const t=printedTime(order);
+  return t!==null&&Date.now()-t>=PRINTED_TTL;
 }
 
 const statusLabels={
@@ -621,11 +648,14 @@ function toast(t){
 function render(){
 
   /*
-    Remove completamente da cozinha os pedidos que já
-    estavam em "Já impressos" antes da regra das 24h.
+    Novos = ainda não impressos. Já impressos = impressos nas últimas 24h
+    (o mais recente primeiro). Impressos há 24h ou mais saem da tela.
   */
-  const fresh=orders.filter(o=>!isPrinted(o));
-  const printed=orders.filter(o=>isPrinted(o));
+  const visible=orders.filter(o=>!printedExpired(o));
+  const fresh=visible.filter(o=>!isPrinted(o));
+  const printed=visible
+    .filter(o=>isPrinted(o))
+    .sort((a,b)=>printedTime(b)-printedTime(a));
 
   const list=
     currentFilter==='novos'
@@ -1513,23 +1543,31 @@ function showInfo(title,lines){
 
 // Roda ao abrir o painel, ao voltar para ele, ao reconectar e a cada 15 min:
 // mostra o estado real deste aparelho e mantém o cadastro no banco sempre válido.
+// É o ÚNICO caminho que cria/salva a inscrição: se já houver uma rodando, todos
+// esperam por ela (evita criar cadastros duplicados ao mesmo tempo).
+// Devolve { ok, error }.
 function syncNotificationState(){
   if(pushSyncPromise)return pushSyncPromise;
   pushSyncPromise=(async()=>{
-    if(!pushSupported()){setNotifyButton('unsupported');return}
-    if(Notification.permission==='denied'){setNotifyButton('denied');return}
-    if(Notification.permission!=='granted'){setNotifyButton('off');return}
+    if(!pushSupported()){setNotifyButton('unsupported');return {ok:false}}
+    if(Notification.permission==='denied'){setNotifyButton('denied');return {ok:false}}
+    if(Notification.permission!=='granted'){setNotifyButton('off');return {ok:false}}
     let subscription=null;
     try{
       const registration=await getPushRegistration();
       subscription=await ensurePushSubscription(registration);
       await savePushSubscription(subscription);
       setNotifyButton('on');
+      return {ok:true};
     }catch(err){
       console.error('Não foi possível verificar a inscrição push:',err);
       // Inscrição existe no aparelho, só não deu para sincronizar agora (ex.: sem internet).
-      if(subscription)setNotifyButton('on','Ativadas neste aparelho (sincronização pendente)');
-      else setNotifyButton('off');
+      if(subscription){
+        setNotifyButton('on','Ativadas neste aparelho (sincronização pendente)');
+        return {ok:true};
+      }
+      setNotifyButton('off');
+      return {ok:false,error:err};
     }
   })().finally(()=>{pushSyncPromise=null});
   return pushSyncPromise;
@@ -1556,9 +1594,11 @@ async function activateNotifications(){
       ?'granted'
       :await Notification.requestPermission();
     if(permission!=='granted')throw new Error('Permita as notificações para receber os pedidos.');
-    const registration=await getPushRegistration();
-    const subscription=await ensurePushSubscription(registration);
-    await savePushSubscription(subscription);
+    // Mesmo caminho da verificação automática (sem criar a inscrição em paralelo).
+    let result=await syncNotificationState();
+    // Se uma verificação antiga terminou antes de a permissão ser liberada, repete uma vez.
+    if(!result.ok)result=await syncNotificationState();
+    if(!result.ok)throw (result.error||new Error('Não foi possível ativar as notificações.'));
     toast('Notificações ativadas neste aparelho!');
   }catch(err){
     console.error(err);
